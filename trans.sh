@@ -76,7 +76,7 @@ base=$(dirname "$0")
 # Transform from ['string'] index notation to .string dot notation:
 s/\[(\?'\([^']\+\)')\?\]/.\1/g
 # Indent comma-separated assigns:
-s/, *\([.0-9_a-zA-Z]\+ \+= \+\)/,\n\t\1/g
+s/, *\([].0-9_a-zA-Z[]\+ \+= \+\)/,\n\t\1/g
 # Easier to read booleans:
 s/!0x0\([^0-9a-f]\|$\)/true\1/g
 s/!0x1\([^0-9a-f]\|$\)/false\1/g
