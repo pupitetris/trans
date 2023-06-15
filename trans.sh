@@ -65,7 +65,7 @@ base=$(dirname "$0")
 
     if [ -e "$INPUT".trans ]; then
 	echo "# Manual symbol translations:"
-	grep -v '^\s*\(#\|$\)' "$INPUT".trans |
+	sed -n 's/^\s+//;s/\s+$//;s/#.*//;s/[(,)]\+$//;/./p' "$INPUT".trans |
 	    while read hex newname; do
 		echo 's/\([^0-9a-zA-Z_]\)'$hex'/\1'$newname'/g'
 	    done
