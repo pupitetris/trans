@@ -7,7 +7,7 @@ function usage {
     {
 	cat <<EOF
 Usage:
-$0 [-d] infile [cond] > outfile
+$0 [-d] infile [cond] [outfile]
 
 	-d	Debug: display all commands (set -x).
 
@@ -15,8 +15,16 @@ $0 [-d] infile [cond] > outfile
 	the obfuscator's functions. cond could be a line number, or a
 	regexp (including slashes: it's a sed address).
 	Default: "1" (from the first line)
+
+	outfile if specified will send output to this file. If the
+	file already exists, a patch will first be generated between
+	the last direct output of the infile's deobfuscation and the
+	outfile, to preserve any changes made on the output after the
+	last run. Then, the translation will be performed and the
+	patch will be reapplied.
+
 Example:
-$0 xcsim_1.3_enc.js '/^function *simulator *()/' > xcsim_1.3.js
+$0 xcsim_1.3_enc.js '/^function *simulator *()/' xcsim_1.3.js
 EOF
     } >&2
     exit 1
@@ -25,10 +33,12 @@ EOF
 # Exit if any command appart from tests fails.
 set -o errexit
   
+# For debugging:
+PS4="$0 \$LINENO: "
+
 DEBUG=$1
 if [ "$DEBUG" = "-d" ]; then
     shift
-    PS4="$0 \$LINENO: "
     set -x
 fi
 
@@ -45,6 +55,13 @@ fi
 
 if [ ! -e "$INPUT" ]; then
     <"$INPUT" # reminder: we are using errexit
+fi
+
+OUTFILE=$1
+if [ -z "$OUTFILE" ]; then
+    OUTFILE=-
+else
+    shift
 fi
 
 INPUT_BEAU=$INPUT-b
@@ -90,7 +107,25 @@ EOF
 
 } > "$INPUT"-sed
 
+
+# Preserve changes in the final outfile in a patch
+if [ ! "x$OUTFILE" = "x-" ]; then
+    if [ -e "$OUTFILE"-trans ]; then
+	diff -u "$OUTFILE"-trans "$OUTFILE" > "$OUTFILE".patch || true
+    fi
+    exec 1>"$OUTFILE"-trans
+fi
+
 # And afterwards pass perl to replace hex literals with decimal literals.
 sed -n -f "$INPUT"-sed "$INPUT_BEAU" |
     perl -pe 's/([^_a-zA-Z0-9])0x([0-9a-f]+)/$1.hex($2)/eg' |
     js-beautify --file - --good-stuff --unescape-strings --break-chained-methods --end-with-newline
+
+# Reapply patch to recover changes
+if [ ! "x$OUTFILE" = "x-" ]; then
+    if [ -e "$OUTFILE".patch ]; then
+	patch -b -o "$OUTFILE" "$OUTFILE"-trans < "$OUTFILE".patch >&2 || true
+    else
+	cp -f "$OUTFILE"-trans "$OUTFILE"
+    fi
+fi

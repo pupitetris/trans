@@ -4,16 +4,24 @@ Quick and dirty deobfuscator for JavaScript code processed with [Javascript-obfu
 
 ```
 Usage:
-./trans.sh [-d] infile [cond] > outfile
+trans.sh [-d] infile [cond] [outfile]
 
-        -d      Debug: display all commands (set -x).
+	-d	Debug: display all commands (set -x).
 
-        lines before cond will not be in the output, in order to remove
-        the obfuscator's functions. cond could be a line number, or a
-        regexp (including slashes: it's a sed address).
-        Default: "1" (from the first line)
+	lines before cond will not be in the output, in order to remove
+	the obfuscator's functions. cond could be a line number, or a
+	regexp (including slashes: it's a sed address).
+	Default: "1" (from the first line)
+
+	outfile if specified will send output to this file. If the
+	file already exists, a patch will first be generated between
+	the last direct output of the infile's deobfuscation and the
+	outfile, to preserve any changes made on the output after the
+	last run. Then, the translation will be performed and the
+	patch will be reapplied.
+
 Example:
-./trans.sh xcsim_1.3_enc.js '/^function *simulator *()/' > xcsim_1.3.js
+trans.sh xcsim_1.3_enc.js '/^function *simulator *()/' xcsim_1.3.js
 ```
 
 The code is deobfuscated in these main steps:
@@ -59,10 +67,13 @@ _0x0d1e2f another_var
   the embedded deobfuscator.
 - Again call [js-beautify](https://github.com/beautify-web/js-beautify) to
   re-indent the resulting source code and decode xNN character literals.
-  
+- If an outfile was specified, apply auto-generated patch to preserve any
+  changes made in the outfile (rejects due to conflicts may have to be
+  resolved by the user).
+
 Dependencies: 
 
-- GNU bash, sed, grep, coreutils (cat, cut, sort, uniq, stat, dirname, basename)
+- GNU bash, sed, grep, patch, diffutils, coreutils (cat, cut, sort, uniq, stat, dirname, basename)
 - node.js (apt install nodejs, tested with 18.13)
 - js-beautify (apt install node-js-beautify, tested with 1.14)
 - perl (standard with Linux installations)
