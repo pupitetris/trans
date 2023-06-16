@@ -4,8 +4,8 @@ Quick and dirty deobfuscator for JavaScript code processed with [Javascript-obfu
 
 ```
 Usage:
-trans.sh [-h] [{-|+}D] [-C=configfile] [{+|-}F]
-        -i=infile [-c=[cond]] [-t=transfile] [-o=[outfile]]
+trans.sh [-h] [{-|+}D] [-C=configfile] [{+|-}F] -i=infile
+        [-c=[cond]] [-t=transfile [{+|-}W]] [-o=[outfile]]
 
         Arguments may be given in any order, any number of times.
 
