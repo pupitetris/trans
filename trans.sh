@@ -212,12 +212,10 @@ function generate_discrete_translator() {
     if [ $(stat -c %Y "$TRANSFILE") -gt 0$(stat -c %Y "$TRANSFILE"-sed 2>/dev/null) ]; then
 	{
 	    echo "# Manual symbol translations:"
-	    set +x
 	    sed -n 's/^\s+//;s/\s+$//;s/#.*//;s/[(,)]\+$//;/./p' "$TRANSFILE" |
 		while read hex newname; do
 		    echo 's/\([^0-9a-zA-Z_]\)'$hex'/\1'$newname'/g'
 		done
-	    set -x
 	} > "$TRANSFILE"-sed
 	return 0
     fi
