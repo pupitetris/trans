@@ -4,24 +4,46 @@ Quick and dirty deobfuscator for JavaScript code processed with [Javascript-obfu
 
 ```
 Usage:
-trans.sh [-d] infile [cond] [outfile]
+trans.sh { -h | [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-o=[outfile]] }
 
-	-d	Debug: display all commands (set -x).
+	Arguments may be given in any order.
 
-	lines before cond will not be in the output, in order to remove
-	the obfuscator's functions. cond could be a line number, or a
-	regexp (including slashes: it's a sed address).
-	Default: "1" (from the first line)
+	-h	Display this help text and exit.
 
-	outfile if specified will send output to this file. If the
-	file already exists, a patch will first be generated between
-	the last direct output of the infile's deobfuscation and the
-	outfile, to preserve any changes made on the output after the
-	last run. Then, the translation will be performed and the
-	patch will be reapplied.
+    -C  Specify a config file which is just a shell file that
+        is sourced to set internal variables that represent
+        command-line switches:
+
+        DEBUG=0|1   Set to 1 to enable debugging
+        PS4=string  Set the debugging prefix string
+                    Default: "$0 \$LINENO: "
+        INPUT=infile
+        OUTPUT=outfile
+        COND=string
+
+        Settings in the config file will be overriden by
+        subsequent command-line arguments.
+
+    -d  Debug: display all commands (set -x).
+    +d  Turn off debugging (default)
+
+    -i  input javascript file with the obfuscated code. Optional
+        if specified from the config file.
+
+    -c  lines before cond will not be in the output, in order to
+        remove the obfuscator's functions. cond could be a line
+        number, or a regexp (including slashes: it's a sed address).
+        Default: "1" (from the first line)
+
+    -o  outfile if specified will send output to this file. If the
+        file already exists, a patch will first be generated between
+        the last direct output of the infile's deobfuscation and the
+        outfile, to preserve any changes made on the output after the
+        last run. Then, the translation will be performed and the
+        patch will be reapplied.
 
 Example:
-trans.sh xcsim_1.3_enc.js '/^function *simulator *()/' xcsim_1.3.js
+trans.sh -i=xcsim_1.3_enc.js -c='/^function *simulator *()/' -o=xcsim_1.3.js
 ```
 
 The code is deobfuscated in these main steps:
@@ -42,9 +64,9 @@ The code is deobfuscated in these main steps:
   - For convenience and to improve readability of this discrete
     translation file, the second column can be suffixed with
     parenthesys or comma (`'('`, `')'` or `','` characters). These
-	characters will be ignored, but are useful to help distinguish
-	between identifiers that denote either plain variable names,
-	function names or parameter names. Example:
+    characters will be ignored, but are useful to help distinguish
+    between identifiers that denote either plain variable names,
+    function names or parameter names. Example:
 
 ```
 # A comment

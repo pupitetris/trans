@@ -1,67 +1,125 @@
 #!/bin/bash
 
-# Debugging:
 #set -x
 
+function die {
+    echo "$0" "$*" >&2
+    exit 1
+}
+
 function usage {
-    {
-	cat <<EOF
+    local LEVEL=${1:-1}
+
+    cat >&2 <<EOF
 Usage:
-$0 [-d] infile [cond] [outfile]
+$0 [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-o=[outfile]] }
+
+	Arguments may be given in any order.
+
+	-h	Display this help text and exit.
+
+	-C	Specify a config file which is just a shell file that
+		is sourced to set internal variables that represent
+		command-line switches:
+
+		DEBUG=0|1	Set to 1 to enable debugging
+		PS4=string	Set the debugging prefix string
+				Default: "$0 \$LINENO: "
+		INPUT=infile
+		OUTPUT=outfile
+		COND=string
+
+		Settings in the config file will be overriden by
+		subsequent command-line arguments.
 
 	-d	Debug: display all commands (set -x).
+	+d	Turn off debugging (default)
 
-	lines before cond will not be in the output, in order to remove
-	the obfuscator's functions. cond could be a line number, or a
-	regexp (including slashes: it's a sed address).
-	Default: "1" (from the first line)
+	-i	input javascript file with the obfuscated code. Optional
+		if specified from the config file.
 
-	outfile if specified will send output to this file. If the
-	file already exists, a patch will first be generated between
-	the last direct output of the infile's deobfuscation and the
-	outfile, to preserve any changes made on the output after the
-	last run. Then, the translation will be performed and the
-	patch will be reapplied.
+	-c	lines before cond will not be in the output, in order to
+		remove the obfuscator's functions. cond could be a line
+		number, or a regexp (including slashes: it's a sed address).
+		Default: "1" (from the first line)
+
+	-o	outfile if specified will send output to this file. If the
+		file already exists, a patch will first be generated between
+		the last direct output of the infile's deobfuscation and the
+		outfile, to preserve any changes made on the output after the
+		last run. Then, the translation will be performed and the
+		patch will be reapplied.
 
 Example:
 $0 xcsim_1.3_enc.js '/^function *simulator *()/' xcsim_1.3.js
 EOF
-    } >&2
-    exit 1
+    exit $LEVEL
 }
+
+function debugging {
+    if [ "$1" != "$DEBUG" ]; then
+	if [ "$1" = 1 ]; then
+	    set -x
+	else
+	    set +x
+	fi
+	DEBUG=$1
+    fi
+}
+
+# For debugging output:
+PS4="$0 \$LINENO: "
 
 # Exit if any command appart from tests fails.
 set -o errexit
   
-# For debugging:
-PS4="$0 \$LINENO: "
+# Cmd-line arg processing
 
-DEBUG=$1
-if [ "$DEBUG" = "-d" ]; then
+[ -z "$1" ] && usage
+
+COND_DEFAULT=1 # Write output from first line.
+OUTPUT_DEFAULT=- # Write output to stdout.
+
+DEBUG=0 # Default: no debug.
+COND=$COND_DEFAULT
+OUTPUT=$OUTPUT_DEFAULT
+
+while [ ! -z "$1" ]; do
+    ARG="$1"
     shift
-    set -x
-fi
+    case ${ARG%%=*} in
+	-h) usage 0 ;;
+	-d) debugging 1 ;;
+	+d) debugging 0 ;;
+	-C)
+	    CONFIG_FILE=${ARG:3}
+	    [ -z "$CONFIG_FILE" ] && die "-c: Missing config file"
+	    source "$CONFIG_FILE"
+	    debugging $DEBUG
+	    ;;
+	-i)
+	    INPUT=${ARG:3}
+	    [ -z "$INPUT" ] && die "-i: Missing infile"
+	    ;;
+	-c)
+	    COND=${ARG:3}
+	    [ -z "$COND" ] && COND=$COND_DEFAULT
+	    ;;
+	-o)
+	    OUTPUT=${ARG:3}
+	    [ -z "$OUTPUT" ] && OUTPUT=$OUTPUT_DEFAULT
+	    ;;
+	*)
+	    die "Unrecognized option \"$ARG\""
+    esac
+done
 
-INPUT=$1
-[ -z "$INPUT" ] && usage
-shift
-
-COND=$1
-if [ -z "$COND" ]; then
-    COND=1
-else
-    shift
-fi
+[ -z "$INPUT" ] && die "Missing infile"
+    
+# End of arg processing.
 
 if [ ! -e "$INPUT" ]; then
     <"$INPUT" # reminder: we are using errexit
-fi
-
-OUTFILE=$1
-if [ -z "$OUTFILE" ]; then
-    OUTFILE=-
-else
-    shift
 fi
 
 INPUT_BEAU=$INPUT-b
@@ -109,11 +167,11 @@ EOF
 
 
 # Preserve changes in the final outfile in a patch
-if [ ! "x$OUTFILE" = "x-" ]; then
-    if [ -e "$OUTFILE"-trans ]; then
-	diff -u "$OUTFILE"-trans "$OUTFILE" > "$OUTFILE".patch || true
+if [ "x$OUTPUT" != "x-" ]; then
+    if [ -e "$OUTPUT"-trans ]; then
+	diff -u "$OUTPUT"-trans "$OUTPUT" > "$OUTPUT".patch || true
     fi
-    exec 1>"$OUTFILE"-trans
+    exec 1>"$OUTPUT"-trans
 fi
 
 # And afterwards pass perl to replace hex literals with decimal literals.
@@ -122,10 +180,10 @@ sed -n -f "$INPUT"-sed "$INPUT_BEAU" |
     js-beautify --file - --good-stuff --unescape-strings --break-chained-methods --end-with-newline
 
 # Reapply patch to recover changes
-if [ ! "x$OUTFILE" = "x-" ]; then
-    if [ -e "$OUTFILE".patch ]; then
-	patch -b -o "$OUTFILE" "$OUTFILE"-trans < "$OUTFILE".patch >&2 || true
+if [ "x$OUTPUT" != "x-" ]; then
+    if [ -e "$OUTPUT".patch ]; then
+	patch -b -o "$OUTPUT" "$OUTPUT"-trans < "$OUTPUT".patch >&2 || true
     else
-	cp -f "$OUTFILE"-trans "$OUTFILE"
+	cp -f "$OUTPUT"-trans "$OUTPUT"
     fi
 fi
