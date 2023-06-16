@@ -124,7 +124,6 @@ while [ ! -z "$1" ]; do
 	    ;;
 	-o)
 	    OUTPUT=${ARG:3}
-	    [ -z "$OUTPUT" ] && OUTPUT=$OUTPUT_DEFAULT
 	    ;;
 	*)
 	    die "Unrecognized option \"$ARG\""
@@ -133,7 +132,9 @@ done
     
 # End of arg processing.
 
-[ -z "$INPUT" ] && die "Missing infile"
+[ -z "$FORCED" ] && FORCED=0
+
+[ -z "$INPUT" ] && die "Missing infile parameter"
 if [ ! -e "$INPUT" ]; then
     <"$INPUT" # reminder: we are using errexit
 fi
@@ -142,11 +143,19 @@ if [ ! -z "$TRANSFILE" -a ! -e "$TRANSFILE" ]; then
     <"$TRANSFILE"
 fi
 
+[ -z "$OUTPUT" ] && OUTPUT=$OUTPUT_DEFAULT
+if [ "x$OUTPUT" != "x-" ]; then
+    HAS_OUTPUT_FILE=1
+else
+    HAS_OUTPUT_FILE=0
+fi
+
 INPUT_BEAU=$INPUT-b
 [ $DEBUG = 0 ] && JS_BEAUTIFY_QUIET=--quiet
 
-if [ "$FORCED" = 1 -o \
-     $(stat -c %Y "$INPUT") -gt 0$(stat -c %Y "$INPUT_BEAU" 2>/dev/null) ]; then
+DO_INITIAL_STAGE=0
+if [ "$FORCED" = 1 -o ! -e "$INPUT"-trans -o \
+	       $(stat -c %Y "$INPUT") -gt 0$(stat -c %Y "$INPUT_BEAU" 2>/dev/null) ]; then
 
     touch "$INPUT_BEAU"
     # apt install node-js-beautify
@@ -195,17 +204,16 @@ if [ ! -z "$TRANSFILE" ]; then
 fi
 
 # Preserve changes to the final outfile in a patch
-if [ "x$OUTPUT" != "x-" ]; then
-    if [ -e "$OUTPUT"-trans2 ]; then
-	diff -u "$OUTPUT"-trans2 "$OUTPUT" > "$OUTPUT".patch || true
+if [ $HAS_OUTPUT_FILE = 1 ]; then
+    if [ -e "$OUTPUT"-trans ]; then
+	diff -u "$OUTPUT"-trans "$OUTPUT" > "$OUTPUT".patch || true
     fi
-    exec 1>"$OUTPUT"-trans2
+    exec 1>"$OUTPUT"-trans
 fi
 
-
 function initial_stage() {
-    if [ -z "$DO_INITIAL_STAGE" ]; then
-	cat "$OUTPUT"-trans1
+    if [ $DO_INITIAL_STAGE = 0 ]; then
+	cat "$INPUT"-trans
 	return
     fi
 
@@ -215,7 +223,7 @@ function initial_stage() {
 	perl -pe 's/([^_a-zA-Z0-9])0x([0-9a-f]+)/$1.hex($2)/eg' |
 	js-beautify --file - --good-stuff --unescape-strings \
 		    --break-chained-methods --end-with-newline |
-	tee "$OUTPUT"-trans1
+	tee "$INPUT"-trans
 }
 
 function final_stage() {
@@ -226,11 +234,11 @@ function final_stage() {
     fi
 
     # Reapply patch to recover changes
-    if [ "x$OUTPUT" != "x-" ]; then
+    if [ $HAS_OUTPUT_FILE = 1 ]; then
 	if [ -e "$OUTPUT".patch ]; then
-	    patch -b -o "$OUTPUT" "$OUTPUT"-trans2 < "$OUTPUT".patch >&2 || true
+	    patch -b -o "$OUTPUT" "$OUTPUT"-trans < "$OUTPUT".patch >&2 || true
 	else
-	    cp -f "$OUTPUT"-trans2 "$OUTPUT"
+	    cp -f "$OUTPUT"-trans "$OUTPUT"
 	fi
     fi
 }
