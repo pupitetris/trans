@@ -40,7 +40,7 @@ trans.sh [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-o=[outfile]]
         the last direct output of the infile's deobfuscation and the
         outfile, to preserve any changes made on the output after the
         last run. Then, the translation will be performed and the
-        patch will be reapplied.
+        patch will be reapplied. Default: use stdout, no patching.
 
 Example:
 trans.sh -i=xcsim_1.3_enc.js -c='/^function *simulator *()/' -o=xcsim_1.3.js

@@ -48,7 +48,7 @@ $0 [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-o=[outfile]]
 		the last direct output of the infile's deobfuscation and the
 		outfile, to preserve any changes made on the output after the
 		last run. Then, the translation will be performed and the
-		patch will be reapplied.
+		patch will be reapplied. Default: use stdout, no patching.
 
 Example:
 $0 xcsim_1.3_enc.js '/^function *simulator *()/' xcsim_1.3.js
@@ -93,7 +93,7 @@ while [ ! -z "$1" ]; do
 	+d) debugging 0 ;;
 	-C)
 	    CONFIG_FILE=${ARG:3}
-	    [ -z "$CONFIG_FILE" ] && die "-c: Missing config file"
+	    [ -z "$CONFIG_FILE" ] && die "-C: Missing config file"
 	    source "$CONFIG_FILE"
 	    debugging $DEBUG
 	    ;;
