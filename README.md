@@ -6,7 +6,7 @@ Quick and dirty deobfuscator for JavaScript code processed with [Javascript-obfu
 Usage:
 trans.sh [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-o=[outfile]]
 
-    Arguments may be given in any order.
+    Arguments may be given in any order, any number of times.
 
     -h  Display this help text and exit.
 
