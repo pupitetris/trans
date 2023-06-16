@@ -12,9 +12,9 @@ function usage {
 
     cat >&2 <<EOF
 Usage:
-$0 [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-o=[outfile]] }
+$0 [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-o=[outfile]]
 
-	Arguments may be given in any order.
+	Arguments may be given in any order, any number of times.
 
 	-h	Display this help text and exit.
 
