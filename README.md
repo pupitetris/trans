@@ -46,6 +46,10 @@ trans.sh [-h] [{-|+}D] [-C=configfile] [{+|-}F]
                 corresponding strings in the second column. See README.md
                 for format.
 
+        -W      If a transfile is specified and after processing is done, watch
+                the file and reexecute process if modifications are detected.
+        +W      Turn off transfile watching.
+
         -o      outfile if specified will send output to this file. If the
                 file already exists, a patch will first be generated between
                 the last direct output of the infile's deobfuscation and the

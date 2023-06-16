@@ -7,8 +7,8 @@ function usage {
 
     cat >&2 <<EOF
 Usage:
-$0 [-h] [{-|+}D] [-C=configfile] [{+|-}F]
-        -i=infile [-c=[cond]] [-t=transfile] [-o=[outfile]]
+$0 [-h] [{-|+}D] [-C=configfile] [{+|-}F] -i=infile
+        [-c=[cond]] [-t=transfile [{+|-}W]] [-o=[outfile]]
 
         Arguments may be given in any order, any number of times.
 
@@ -49,6 +49,10 @@ $0 [-h] [{-|+}D] [-C=configfile] [{+|-}F]
                 corresponding strings in the second column. See README.md
                 for format.
 
+        -W      If a transfile is specified and after processing is done, watch
+                the file and reexecute process if modifications are detected.
+        +W      Turn off transfile watching.
+
         -o      outfile if specified will send output to this file. If the
                 file already exists, a patch will first be generated between
                 the last direct output of the infile's deobfuscation and the
@@ -87,14 +91,18 @@ set -o errexit
 
 [ -z "$1" ] && usage
 
+DEBUG_DEFAULT=0
+FORCED_DEFAULT=0
 COND_DEFAULT=1 # Write output from first line.
+WATCH_TRANSFILE_DEFAULT=0
 OUTPUT_DEFAULT=- # Write output to stdout.
 
-DEBUG=0 # Default: no debug.
-FORCED=0
+DEBUG=$DEBUG_DEFAULT # Default: no debug.
+FORCED=$FORCED_DEFAULT
 COND=$COND_DEFAULT
-OUTPUT=$OUTPUT_DEFAULT
 TRANSFILE= # Default: don't use a transfile.
+WATCH_TRANSFILE=$WATCH_TRANSFILE_DEFAULT
+OUTPUT=$OUTPUT_DEFAULT
 
 while [ ! -z "$1" ]; do
     ARG="$1"
@@ -105,6 +113,8 @@ while [ ! -z "$1" ]; do
 	+d) debugging 0 ;;
 	-F) FORCED=1 ;;
 	+F) FORCED=0 ;;
+	-W) WATCH_TRANSFILE=1 ;;
+	+W) WATCH_TRANSFILE=0 ;;
 	-C)
 	    CONFIG_FILE=${ARG:3}
 	    [ -z "$CONFIG_FILE" ] && die "-C: Missing config file"
@@ -130,9 +140,9 @@ while [ ! -z "$1" ]; do
     esac
 done
     
-# End of arg processing.
+# Now canonize and validate configuration:
 
-[ -z "$FORCED" ] && FORCED=0
+[ -z "$FORCED" ] && FORCED=$FORCED_DEFAULT
 
 [ -z "$INPUT" ] && die "Missing infile parameter"
 if [ ! -e "$INPUT" ]; then
@@ -141,6 +151,11 @@ fi
 
 if [ ! -z "$TRANSFILE" -a ! -e "$TRANSFILE" ]; then
     <"$TRANSFILE"
+fi
+
+[ -z "$WATCH_TRANSFILE" ] && WATCH_TRANSFILE=$WATCH_TRANSFILE_DEFAULT
+if [ $WATCH_TRANSFILE = 1 -a -z "$TRANSFILE" ]; then
+    die "Transfile watching requested, but no transfile specified"
 fi
 
 [ -z "$OUTPUT" ] && OUTPUT=$OUTPUT_DEFAULT
@@ -190,17 +205,27 @@ s/!\[\]/false/g
 p
 }
 EOF
-    } > "$INPUT"-sed1
+    } > "$INPUT"-sed
 fi
 
+function generate_discrete_translator() {
+    if [ $(stat -c %Y "$TRANSFILE") -gt 0$(stat -c %Y "$TRANSFILE"-sed 2>/dev/null) ]; then
+	{
+	    echo "# Manual symbol translations:"
+	    set +x
+	    sed -n 's/^\s+//;s/\s+$//;s/#.*//;s/[(,)]\+$//;/./p' "$TRANSFILE" |
+		while read hex newname; do
+		    echo 's/\([^0-9a-zA-Z_]\)'$hex'/\1'$newname'/g'
+		done
+	    set -x
+	} > "$TRANSFILE"-sed
+	return 0
+    fi
+    return 1
+}
+
 if [ ! -z "$TRANSFILE" ]; then
-    {
-	echo "# Manual symbol translations:"
-	sed -n 's/^\s+//;s/\s+$//;s/#.*//;s/[(,)]\+$//;/./p' "$TRANSFILE" |
-	    while read hex newname; do
-		echo 's/\([^0-9a-zA-Z_]\)'$hex'/\1'$newname'/g'
-	    done
-    } > "$INPUT"-sed2
+    generate_discrete_translator || true
 fi
 
 # Preserve changes to the final outfile in a patch
@@ -219,7 +244,7 @@ function initial_stage() {
 
     # Call sed and afterwards pass perl to replace hex literals
     # with decimal literals. Finally reindent.
-    sed -n -f "$INPUT"-sed1 "$INPUT_BEAU" |
+    sed -n -f "$INPUT"-sed "$INPUT_BEAU" |
 	perl -pe 's/([^_a-zA-Z0-9])0x([0-9a-f]+)/$1.hex($2)/eg' |
 	js-beautify --file - --good-stuff --unescape-strings \
 		    --break-chained-methods --end-with-newline |
@@ -230,7 +255,7 @@ function final_stage() {
     if [ -z "$TRANSFILE" ]; then
 	cat
     else
-	sed -f "$INPUT"-sed2
+	sed -f "$TRANSFILE"-sed
     fi
 
     # Reapply patch to recover changes
@@ -244,3 +269,12 @@ function final_stage() {
 }
 
 initial_stage | final_stage
+
+if [ $WATCH_TRANSFILE = 1 ]; then
+    while inotifywait "$TRANSFILE" --event MODIFY --quiet >&2; do
+	generate_discrete_translator &&
+	    exec 1>&- &&
+	    exec 1>"$OUTPUT"-trans &&
+	    final_stage < "$INPUT"-trans
+    done
+fi
