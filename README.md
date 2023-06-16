@@ -6,9 +6,9 @@ Quick and dirty deobfuscator for JavaScript code processed with [Javascript-obfu
 Usage:
 trans.sh { -h | [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-o=[outfile]] }
 
-	Arguments may be given in any order.
+    Arguments may be given in any order.
 
-	-h	Display this help text and exit.
+    -h  Display this help text and exit.
 
     -C  Specify a config file which is just a shell file that
         is sourced to set internal variables that represent
