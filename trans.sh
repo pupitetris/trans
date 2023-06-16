@@ -2,59 +2,59 @@
 
 #set -x
 
-function die {
-    echo "$0" "$*" >&2
-    exit 1
-}
-
 function usage {
     local LEVEL=${1:-1}
 
     cat >&2 <<EOF
 Usage:
-$0 [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-t=transfile] [-o=[outfile]]
+$0 [-h] [{-|+}D] [-C=configfile] [{+|-}F]
+        -i=infile [-c=[cond]] [-t=transfile] [-o=[outfile]]
 
-	Arguments may be given in any order, any number of times.
+        Arguments may be given in any order, any number of times.
 
-	-h	Display this help text and exit.
+        -h      Display this help text and exit.
 
-	-C	Specify a config file which is just a shell file that
-		is sourced to set internal variables that represent
-		command-line switches:
+        -C      Specify a config file which is just a shell file that
+                is sourced to set internal variables that represent
+                command-line switches:
 
-		DEBUG=0|1	Set to 1 to enable debugging
-		PS4=string	Set the debugging prefix string
-				Default: "$0 \$LINENO: "
-		INPUT=infile
-		COND=string
-		TRANSFILE=transfile
-		OUTPUT=outfile
+                DEBUG=0|1        Set to 1 to enable debugging
+                PS4=string       Set the debugging prefix string
+                                 Default: "$0 \$LINENO: "
+                FORCED=0|1       Set to 1 to enable forced execution.
+                INPUT=infile
+                COND=string
+                TRANSFILE=transfile
+                OUTPUT=outfile
 
-		Settings in the config file will be overriden by
-		subsequent command-line arguments.
+                Settings in the config file will be overriden by
+                subsequent command-line arguments.
 
-	-d	Debug: display all commands (set -x).
-	+d	Turn off debugging (default)
+        -D      Debug: display all commands (set -x).
+        +D      Turn off debugging (default)
 
-	-i	input javascript file with the obfuscated code. Optional
-		if specified from the config file.
+        -F      Force execution of all stages, don't compare mod stats.
+        +F      Turn off forced execution.
 
-	-c	lines before cond will not be in the output, in order to
-		remove the obfuscator's functions. cond could be a line
-		number, or a regexp (including slashes: it's a sed address).
-		Default: "1" (from the first line)
+        -i      input javascript file with the obfuscated code. Optional
+                if specified from the config file.
 
-	-t	transfile, if specified, instructions are rendered to replace
-		identifiers from the first column in the transfile with the
-		corresponding strings in the second column. See README.md
-		for format.
+        -c      lines before cond will not be in the output, in order to
+                remove the obfuscator's functions. cond could be a line
+                number, or a regexp (including slashes: it's a sed address).
+                Default: "1" (from the first line)
 
-	-o	outfile if specified will send output to this file. If the
-		file already exists, a patch will first be generated between
-		the last direct output of the infile's deobfuscation and the
-		outfile, to preserve any changes made on the output after the
-		last run. Then, the translation will be performed and the
-		patch will be reapplied. Default: use stdout, no patching.
+        -t      transfile, if specified, instructions are rendered to replace
+                identifiers from the first column in the transfile with the
+                corresponding strings in the second column. See README.md
+                for format.
+
+        -o      outfile if specified will send output to this file. If the
+                file already exists, a patch will first be generated between
+                the last direct output of the infile's deobfuscation and the
+                outfile, to preserve any changes made on the output after the
+                last run. Then, the translation will be performed and the
+                patch will be reapplied. Default: use stdout, no patching.
 
 Example:
 $0 xcsim_1.3_enc.js '/^function *simulator *()/' xcsim_1.3.js
@@ -62,14 +62,18 @@ EOF
     exit $LEVEL
 }
 
+function die {
+    echo "$0" "$*" >&2
+    exit 1
+}
+
 function debugging {
-    if [ "$1" != "$DEBUG" ]; then
-	if [ "$1" = 1 ]; then
-	    set -x
-	else
-	    set +x
-	fi
-	DEBUG=$1
+    if [ "$1" = 1 ]; then
+	set -x
+	DEBUG=1
+    else
+	DEBUG=0
+	set +x
     fi
 }
 
@@ -87,9 +91,10 @@ COND_DEFAULT=1 # Write output from first line.
 OUTPUT_DEFAULT=- # Write output to stdout.
 
 DEBUG=0 # Default: no debug.
+FORCED=0
 COND=$COND_DEFAULT
 OUTPUT=$OUTPUT_DEFAULT
-TRANSFILE=
+TRANSFILE= # Default: don't use a transfile.
 
 while [ ! -z "$1" ]; do
     ARG="$1"
@@ -98,6 +103,8 @@ while [ ! -z "$1" ]; do
 	-h) usage 0 ;;
 	-d) debugging 1 ;;
 	+d) debugging 0 ;;
+	-F) FORCED=1 ;;
+	+F) FORCED=0 ;;
 	-C)
 	    CONFIG_FILE=${ARG:3}
 	    [ -z "$CONFIG_FILE" ] && die "-C: Missing config file"
@@ -135,12 +142,17 @@ if [ ! -z "$TRANSFILE" -a ! -e "$TRANSFILE" ]; then
     <"$TRANSFILE"
 fi
 
-base=$(dirname "$0")
 INPUT_BEAU=$INPUT-b
+[ $DEBUG = 0 ] && JS_BEAUTIFY_QUIET=--quiet
 
-if [ $(stat -c %Y "$INPUT") -gt 0$(stat -c %Y "$INPUT_BEAU" 2>/dev/null) ]; then
+if [ "$FORCED" = 1 -o \
+     $(stat -c %Y "$INPUT") -gt 0$(stat -c %Y "$INPUT_BEAU" 2>/dev/null) ]; then
+
+    touch "$INPUT_BEAU"
     # apt install node-js-beautify
-    js-beautify --file "$INPUT" --outfile "$INPUT_BEAU"
+    js-beautify $JS_BEAUTIFY_QUIET --file "$INPUT" --outfile "$INPUT_BEAU" >&2
+
+    DO_INITIAL_STAGE=1
 
     {
 	cat <<EOF
@@ -148,6 +160,7 @@ $COND,\${
 # Obfuscated strings:
 EOF
 
+	base=$(dirname "$0")
 	sed 's/a0_0x1993('\''\([^'\'']\+\)'\'', \?'\''\([^'\'']\+\)'\''/\n@@@\t\1\t\2\n/g' "$INPUT_BEAU" |
 	    grep ^@@@ | cut -c5- | sort --key=1,3 --general-numeric-sort | uniq |
 	    node "$base"/trans.js "$INPUT_BEAU"
@@ -181,15 +194,31 @@ if [ ! -z "$TRANSFILE" ]; then
     } > "$INPUT"-sed2
 fi
 
-# Preserve changes in the final outfile in a patch
+# Preserve changes to the final outfile in a patch
 if [ "x$OUTPUT" != "x-" ]; then
-    if [ -e "$OUTPUT"-transjs ]; then
-	diff -u "$OUTPUT"-transjs "$OUTPUT" > "$OUTPUT".patch || true
+    if [ -e "$OUTPUT"-trans2 ]; then
+	diff -u "$OUTPUT"-trans2 "$OUTPUT" > "$OUTPUT".patch || true
     fi
-    exec 1>"$OUTPUT"-transjs
+    exec 1>"$OUTPUT"-trans2
 fi
 
-function last_stage() {
+
+function initial_stage() {
+    if [ -z "$DO_INITIAL_STAGE" ]; then
+	cat "$OUTPUT"-trans1
+	return
+    fi
+
+    # Call sed and afterwards pass perl to replace hex literals
+    # with decimal literals. Finally reindent.
+    sed -n -f "$INPUT"-sed1 "$INPUT_BEAU" |
+	perl -pe 's/([^_a-zA-Z0-9])0x([0-9a-f]+)/$1.hex($2)/eg' |
+	js-beautify --file - --good-stuff --unescape-strings \
+		    --break-chained-methods --end-with-newline |
+	tee "$OUTPUT"-trans1
+}
+
+function final_stage() {
     if [ -z "$TRANSFILE" ]; then
 	cat
     else
@@ -199,17 +228,11 @@ function last_stage() {
     # Reapply patch to recover changes
     if [ "x$OUTPUT" != "x-" ]; then
 	if [ -e "$OUTPUT".patch ]; then
-	    patch -b -o "$OUTPUT" "$OUTPUT"-transjs < "$OUTPUT".patch >&2 || true
+	    patch -b -o "$OUTPUT" "$OUTPUT"-trans2 < "$OUTPUT".patch >&2 || true
 	else
-	    cp -f "$OUTPUT"-transjs "$OUTPUT"
+	    cp -f "$OUTPUT"-trans2 "$OUTPUT"
 	fi
     fi
 }
 
-# And afterwards pass perl to replace hex literals with decimal literals.
-sed -n -f "$INPUT"-sed1 "$INPUT_BEAU" |
-    perl -pe 's/([^_a-zA-Z0-9])0x([0-9a-f]+)/$1.hex($2)/eg' |
-    js-beautify --file - --good-stuff --unescape-strings --break-chained-methods --end-with-newline |
-    last_stage
-
-
+initial_stage | final_stage

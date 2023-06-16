@@ -4,19 +4,21 @@ Quick and dirty deobfuscator for JavaScript code processed with [Javascript-obfu
 
 ```
 Usage:
-trans.sh [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-t=transfile] [-o=[outfile]]
+trans.sh [-h] [{-|+}D] [-C=configfile] [{+|-}F]
+        -i=infile [-c=[cond]] [-t=transfile] [-o=[outfile]]
 
         Arguments may be given in any order, any number of times.
 
-        -h  Display this help text and exit.
+        -h      Display this help text and exit.
 
-        -C  Specify a config file which is just a shell file that
+        -C      Specify a config file which is just a shell file that
                 is sourced to set internal variables that represent
                 command-line switches:
 
-                DEBUG=0|1         Set to 1 to enable debugging
-                PS4=string        Set the debugging prefix string
-                                  Default: "$0 \$LINENO: "
+                DEBUG=0|1        Set to 1 to enable debugging
+                PS4=string       Set the debugging prefix string
+                                 Default: "$0 \$LINENO: "
+                FORCED=0|1       Set to 1 to enable forced execution.
                 INPUT=infile
                 COND=string
                 TRANSFILE=transfile
@@ -25,8 +27,11 @@ trans.sh [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-t=transfile] [-o=
                 Settings in the config file will be overriden by
                 subsequent command-line arguments.
 
-        -d      Debug: display all commands (set -x).
-        +d      Turn off debugging (default)
+        -D      Debug: display all commands (set -x).
+        +D      Turn off debugging (default)
+
+        -F      Force execution of all stages, don't compare mod stats.
+        +F      Turn off forced execution.
 
         -i      input javascript file with the obfuscated code. Optional
                 if specified from the config file.
