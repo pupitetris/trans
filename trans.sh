@@ -12,7 +12,7 @@ function usage {
 
     cat >&2 <<EOF
 Usage:
-$0 [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-o=[outfile]]
+$0 [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-t=transfile] [-o=[outfile]]
 
 	Arguments may be given in any order, any number of times.
 
@@ -26,8 +26,9 @@ $0 [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-o=[outfile]]
 		PS4=string	Set the debugging prefix string
 				Default: "$0 \$LINENO: "
 		INPUT=infile
-		OUTPUT=outfile
 		COND=string
+		TRANSFILE=transfile
+		OUTPUT=outfile
 
 		Settings in the config file will be overriden by
 		subsequent command-line arguments.
@@ -42,6 +43,11 @@ $0 [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-o=[outfile]]
 		remove the obfuscator's functions. cond could be a line
 		number, or a regexp (including slashes: it's a sed address).
 		Default: "1" (from the first line)
+
+	-t	transfile, if specified, instructions are rendered to replace
+		identifiers from the first column in the transfile with the
+		corresponding strings in the second column. See README.md
+		for format.
 
 	-o	outfile if specified will send output to this file. If the
 		file already exists, a patch will first be generated between
@@ -83,6 +89,7 @@ OUTPUT_DEFAULT=- # Write output to stdout.
 DEBUG=0 # Default: no debug.
 COND=$COND_DEFAULT
 OUTPUT=$OUTPUT_DEFAULT
+TRANSFILE=
 
 while [ ! -z "$1" ]; do
     ARG="$1"
@@ -105,6 +112,9 @@ while [ ! -z "$1" ]; do
 	    COND=${ARG:3}
 	    [ -z "$COND" ] && COND=$COND_DEFAULT
 	    ;;
+	-t)
+	    TRANSFILE=${ARG:3}
+	    ;;
 	-o)
 	    OUTPUT=${ARG:3}
 	    [ -z "$OUTPUT" ] && OUTPUT=$OUTPUT_DEFAULT
@@ -113,13 +123,16 @@ while [ ! -z "$1" ]; do
 	    die "Unrecognized option \"$ARG\""
     esac
 done
-
-[ -z "$INPUT" ] && die "Missing infile"
     
 # End of arg processing.
 
+[ -z "$INPUT" ] && die "Missing infile"
 if [ ! -e "$INPUT" ]; then
     <"$INPUT" # reminder: we are using errexit
+fi
+
+if [ ! -z "$TRANSFILE" -a ! -e "$TRANSFILE" ]; then
+    <"$TRANSFILE"
 fi
 
 INPUT_BEAU=$INPUT-b
@@ -138,9 +151,9 @@ base=$(dirname "$0")
 	grep ^@@@ | cut -c5- | sort --key=1,3 --general-numeric-sort | uniq |
 	node "$base"/trans.js "$INPUT_BEAU"
 
-    if [ -e "$INPUT".trans ]; then
+    if [ ! -z "$TRANSFILE" ]; then
 	echo "# Manual symbol translations:"
-	sed -n 's/^\s+//;s/\s+$//;s/#.*//;s/[(,)]\+$//;/./p' "$INPUT".trans |
+	sed -n 's/^\s+//;s/\s+$//;s/#.*//;s/[(,)]\+$//;/./p' "$TRANSFILE" |
 	    while read hex newname; do
 		echo 's/\([^0-9a-zA-Z_]\)'$hex'/\1'$newname'/g'
 	    done

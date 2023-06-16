@@ -4,7 +4,7 @@ Quick and dirty deobfuscator for JavaScript code processed with [Javascript-obfu
 
 ```
 Usage:
-trans.sh [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-o=[outfile]]
+trans.sh [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-t=transfile] [-o=[outfile]]
 
     Arguments may be given in any order, any number of times.
 
@@ -18,8 +18,9 @@ trans.sh [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-o=[outfile]]
         PS4=string  Set the debugging prefix string
                     Default: "$0 \$LINENO: "
         INPUT=infile
-        OUTPUT=outfile
         COND=string
+		TRANSFILE=transfile
+        OUTPUT=outfile
 
         Settings in the config file will be overriden by
         subsequent command-line arguments.
@@ -34,6 +35,11 @@ trans.sh [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-o=[outfile]]
         remove the obfuscator's functions. cond could be a line
         number, or a regexp (including slashes: it's a sed address).
         Default: "1" (from the first line)
+
+    -t  transfile, if specified, instructions are rendered to replace
+        identifiers from the first column in the transfile with the
+        corresponding strings in the second column. See README.md
+        for format.
 
     -o  outfile if specified will send output to this file. If the
         file already exists, a patch will first be generated between
@@ -54,12 +60,12 @@ The code is deobfuscated in these main steps:
   the deobfuscating functions present within the source code itself
   and run that for every invocation within the code to obtain the
   clear-text strings that replace the invocations.
-- If an &lt;infile&gt;.trans file is found, instructions are rendered
-  to replace identifiers from the first column in the .trans file with
-  the corresponding strings in the second column.  Hash comments and
-  empty lines are ignored. Columns are separated by space-type
-  characters per shell rules (one or more of SPC or TAB). This allows
-  for discrete identifier replacement, since those names cannot be
+- If a transfile is specified, instructions are rendered to replace
+  identifiers from the first column in the .trans file with the
+  corresponding strings in the second column.  Hash comments and empty
+  lines are ignored. Columns are separated by space-type characters
+  per shell rules (one or more of SPC or TAB). This allows for
+  discrete identifier replacement, since those names cannot be
   recovered automatically.
   - For convenience and to improve readability of this discrete
     translation file, the second column can be suffixed with
