@@ -209,14 +209,19 @@ EOF
 fi
 
 function generate_discrete_translator() {
-    if [ $(stat -c %Y "$TRANSFILE") -gt 0$(stat -c %Y "$TRANSFILE"-sed 2>/dev/null) ]; then
-	{
-	    echo "# Manual symbol translations:"
-	    sed -n 's/^\s+//;s/\s+$//;s/#.*//;s/[(,)]\+$//;/./p' "$TRANSFILE" |
-		while read hex newname; do
-		    echo 's/\([^0-9a-zA-Z_]\)'$hex'/\1'$newname'/g'
-		done
-	} > "$TRANSFILE"-sed
+    if [ $FORCED = 1 -o \
+	 $(stat -c %Y "$TRANSFILE") -gt 0$(stat -c %Y "$TRANSFILE"-sed 2>/dev/null) ]; then
+	sed -n '
+	    1i# Manual symbol translations:
+	    s/^\s+//
+	    s/\s+$//
+	    s/^#.*//
+	    s/[(,)]\+$//
+	    /./{
+		s/^[^[:space:]]\+\s*$/& /
+		s/^\([^[:space:]]\+\)\s\+\(.*\|$\)/s\/\\([^0-9a-zA-Z_]\\)\1\/\\1\2\/g/
+		p
+	    }' "$TRANSFILE" > "$TRANSFILE"-sed
 	return 0
     fi
     return 1
