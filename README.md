@@ -114,6 +114,7 @@ _0x0d1e2f another_var
 - node.js (apt install nodejs, tested with 18.13)
 - js-beautify (apt install node-js-beautify, tested with 1.14)
 - perl (standard with Linux installations)
+- inotifywait (apt install inotify-tools, optional if you want automatic reprocessing)
 
 ## TO-DO:
 
