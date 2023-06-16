@@ -6,47 +6,47 @@ Quick and dirty deobfuscator for JavaScript code processed with [Javascript-obfu
 Usage:
 trans.sh [-h] [{-|+}d] [-C=configfile] -i=infile [-c=[cond]] [-t=transfile] [-o=[outfile]]
 
-    Arguments may be given in any order, any number of times.
+        Arguments may be given in any order, any number of times.
 
-    -h  Display this help text and exit.
+        -h  Display this help text and exit.
 
-    -C  Specify a config file which is just a shell file that
-        is sourced to set internal variables that represent
-        command-line switches:
+        -C  Specify a config file which is just a shell file that
+                is sourced to set internal variables that represent
+                command-line switches:
 
-        DEBUG=0|1   Set to 1 to enable debugging
-        PS4=string  Set the debugging prefix string
-                    Default: "$0 \$LINENO: "
-        INPUT=infile
-        COND=string
-		TRANSFILE=transfile
-        OUTPUT=outfile
+                DEBUG=0|1         Set to 1 to enable debugging
+                PS4=string        Set the debugging prefix string
+                                  Default: "$0 \$LINENO: "
+                INPUT=infile
+                COND=string
+                TRANSFILE=transfile
+                OUTPUT=outfile
 
-        Settings in the config file will be overriden by
-        subsequent command-line arguments.
+                Settings in the config file will be overriden by
+                subsequent command-line arguments.
 
-    -d  Debug: display all commands (set -x).
-    +d  Turn off debugging (default)
+        -d      Debug: display all commands (set -x).
+        +d      Turn off debugging (default)
 
-    -i  input javascript file with the obfuscated code. Optional
-        if specified from the config file.
+        -i      input javascript file with the obfuscated code. Optional
+                if specified from the config file.
 
-    -c  lines before cond will not be in the output, in order to
-        remove the obfuscator's functions. cond could be a line
-        number, or a regexp (including slashes: it's a sed address).
-        Default: "1" (from the first line)
+        -c      lines before cond will not be in the output, in order to
+                remove the obfuscator's functions. cond could be a line
+                number, or a regexp (including slashes: it's a sed address).
+                Default: "1" (from the first line)
 
-    -t  transfile, if specified, instructions are rendered to replace
-        identifiers from the first column in the transfile with the
-        corresponding strings in the second column. See README.md
-        for format.
+        -t      transfile, if specified, instructions are rendered to replace
+                identifiers from the first column in the transfile with the
+                corresponding strings in the second column. See README.md
+                for format.
 
-    -o  outfile if specified will send output to this file. If the
-        file already exists, a patch will first be generated between
-        the last direct output of the infile's deobfuscation and the
-        outfile, to preserve any changes made on the output after the
-        last run. Then, the translation will be performed and the
-        patch will be reapplied. Default: use stdout, no patching.
+        -o      outfile if specified will send output to this file. If the
+                file already exists, a patch will first be generated between
+                the last direct output of the infile's deobfuscation and the
+                outfile, to preserve any changes made on the output after the
+                last run. Then, the translation will be performed and the
+                patch will be reapplied. Default: use stdout, no patching.
 
 Example:
 trans.sh -i=xcsim_1.3_enc.js -c='/^function *simulator *()/' -o=xcsim_1.3.js
@@ -99,13 +99,13 @@ _0x0d1e2f another_var
   changes made in the outfile (rejects due to conflicts may have to be
   resolved by the user).
 
-Dependencies: 
+## Dependencies:
 
 - GNU bash, sed, grep, patch, diffutils, coreutils (cat, cut, sort, uniq, stat, dirname, basename)
 - node.js (apt install nodejs, tested with 18.13)
 - js-beautify (apt install node-js-beautify, tested with 1.14)
 - perl (standard with Linux installations)
 
-TO-DO:
+## TO-DO:
 
 - Maybe rewrite the shell/sed part in Perl, but computers are fast now.
