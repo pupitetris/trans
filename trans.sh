@@ -135,31 +135,24 @@ if [ ! -z "$TRANSFILE" -a ! -e "$TRANSFILE" ]; then
     <"$TRANSFILE"
 fi
 
+base=$(dirname "$0")
 INPUT_BEAU=$INPUT-b
+
 if [ $(stat -c %Y "$INPUT") -gt 0$(stat -c %Y "$INPUT_BEAU" 2>/dev/null) ]; then
     # apt install node-js-beautify
     js-beautify --file "$INPUT" --outfile "$INPUT_BEAU"
-fi
 
-base=$(dirname "$0")
+    {
+	cat <<EOF
+$COND,\${
+# Obfuscated strings:
+EOF
 
-{
-    echo "$COND,\${"
-    echo "# Obfuscated strings:"
+	sed 's/a0_0x1993('\''\([^'\'']\+\)'\'', \?'\''\([^'\'']\+\)'\''/\n@@@\t\1\t\2\n/g' "$INPUT_BEAU" |
+	    grep ^@@@ | cut -c5- | sort --key=1,3 --general-numeric-sort | uniq |
+	    node "$base"/trans.js "$INPUT_BEAU"
 
-    sed 's/a0_0x1993('\''\([^'\'']\+\)'\'', \?'\''\([^'\'']\+\)'\''/\n@@@\t\1\t\2\n/g' "$INPUT_BEAU" |
-	grep ^@@@ | cut -c5- | sort --key=1,3 --general-numeric-sort | uniq |
-	node "$base"/trans.js "$INPUT_BEAU"
-
-    if [ ! -z "$TRANSFILE" ]; then
-	echo "# Manual symbol translations:"
-	sed -n 's/^\s+//;s/\s+$//;s/#.*//;s/[(,)]\+$//;/./p' "$TRANSFILE" |
-	    while read hex newname; do
-		echo 's/\([^0-9a-zA-Z_]\)'$hex'/\1'$newname'/g'
-	    done
-    fi
-
-    cat <<EOF
+	cat <<EOF
 # Deobfuscation:
 # Transform from ['string'] index notation to .string dot notation:
 s/\[(\?'\([^']\+\)')\?\]/.\1/g
@@ -175,28 +168,48 @@ s/!\[\]/false/g
 p
 }
 EOF
+    } > "$INPUT"-sed1
+fi
 
-} > "$INPUT"-sed
-
+if [ ! -z "$TRANSFILE" ]; then
+    {
+	echo "# Manual symbol translations:"
+	sed -n 's/^\s+//;s/\s+$//;s/#.*//;s/[(,)]\+$//;/./p' "$TRANSFILE" |
+	    while read hex newname; do
+		echo 's/\([^0-9a-zA-Z_]\)'$hex'/\1'$newname'/g'
+	    done
+    } > "$INPUT"-sed2
+fi
 
 # Preserve changes in the final outfile in a patch
 if [ "x$OUTPUT" != "x-" ]; then
-    if [ -e "$OUTPUT"-trans ]; then
-	diff -u "$OUTPUT"-trans "$OUTPUT" > "$OUTPUT".patch || true
+    if [ -e "$OUTPUT"-transjs ]; then
+	diff -u "$OUTPUT"-transjs "$OUTPUT" > "$OUTPUT".patch || true
     fi
-    exec 1>"$OUTPUT"-trans
+    exec 1>"$OUTPUT"-transjs
 fi
+
+function last_stage() {
+    if [ -z "$TRANSFILE" ]; then
+	cat
+    else
+	sed -f "$INPUT"-sed2
+    fi
+
+    # Reapply patch to recover changes
+    if [ "x$OUTPUT" != "x-" ]; then
+	if [ -e "$OUTPUT".patch ]; then
+	    patch -b -o "$OUTPUT" "$OUTPUT"-transjs < "$OUTPUT".patch >&2 || true
+	else
+	    cp -f "$OUTPUT"-transjs "$OUTPUT"
+	fi
+    fi
+}
 
 # And afterwards pass perl to replace hex literals with decimal literals.
-sed -n -f "$INPUT"-sed "$INPUT_BEAU" |
+sed -n -f "$INPUT"-sed1 "$INPUT_BEAU" |
     perl -pe 's/([^_a-zA-Z0-9])0x([0-9a-f]+)/$1.hex($2)/eg' |
-    js-beautify --file - --good-stuff --unescape-strings --break-chained-methods --end-with-newline
+    js-beautify --file - --good-stuff --unescape-strings --break-chained-methods --end-with-newline |
+    last_stage
 
-# Reapply patch to recover changes
-if [ "x$OUTPUT" != "x-" ]; then
-    if [ -e "$OUTPUT".patch ]; then
-	patch -b -o "$OUTPUT" "$OUTPUT"-trans < "$OUTPUT".patch >&2 || true
-    else
-	cp -f "$OUTPUT"-trans "$OUTPUT"
-    fi
-fi
+
