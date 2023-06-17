@@ -20,7 +20,7 @@ $0 [-h] [{-|+}D] [-C=configfile] [{-|+}F] -i=infile
 
                 DEBUG=0|1
                 PS4=string       Set the debugging prefix string
-                                 Default: "$0 \$LINENO: "
+                                 Default: "\$0 \\\$LINENO: "
                 FORCED=0|1
                 MONITOR=0|1
                 INPUT=infile
