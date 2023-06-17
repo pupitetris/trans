@@ -8,7 +8,7 @@ function usage {
     cat >&2 <<EOF
 Usage:
 $0 [-h] [{-|+}D] [-C=configfile] [{+|-}F] -i=infile
-        [-c=[cond]] [-t=transfile [{+|-}W]] [-o=[outfile]]
+        [-c=[cond]] [-t=transfile [-o=[outfile]] [{+|-}M]]
 
         Arguments may be given in any order, any number of times.
 
@@ -18,10 +18,11 @@ $0 [-h] [{-|+}D] [-C=configfile] [{+|-}F] -i=infile
                 is sourced to set internal variables that represent
                 command-line switches:
 
-                DEBUG=0|1        Set to 1 to enable debugging
+                DEBUG=0|1
                 PS4=string       Set the debugging prefix string
                                  Default: "$0 \$LINENO: "
-                FORCED=0|1       Set to 1 to enable forced execution.
+                FORCED=0|1
+                MONITOR=0|1
                 INPUT=infile
                 COND=string
                 TRANSFILE=transfile
@@ -49,16 +50,18 @@ $0 [-h] [{-|+}D] [-C=configfile] [{+|-}F] -i=infile
                 corresponding strings in the second column. See README.md
                 for format.
 
-        -W      If a transfile is specified and after processing is done, watch
-                the file and reexecute process if modifications are detected.
-        +W      Turn off transfile watching.
-
         -o      outfile if specified will send output to this file. If the
                 file already exists, a patch will first be generated between
                 the last direct output of the infile's deobfuscation and the
                 outfile, to preserve any changes made on the output after the
                 last run. Then, the translation will be performed and the
                 patch will be reapplied. Default: use stdout, no patching.
+
+        -M      Stand by monitoring files, reprocess accordingly. If transfile
+                is modified, regenerate discrete translator and reprocess. If
+                outfile is modified, regenerate patch. Any reprocessing errors
+                will stop monitoring and force an exit.
+        +M      Disable monitoring.
 
 Example:
 $0 xcsim_1.3_enc.js '/^function *simulator *()/' xcsim_1.3.js
@@ -94,14 +97,14 @@ set -o errexit
 DEBUG_DEFAULT=0
 FORCED_DEFAULT=0
 COND_DEFAULT=1 # Write output from first line.
-WATCH_TRANSFILE_DEFAULT=0
+MONITOR_DEFAULT=0
 OUTPUT_DEFAULT=- # Write output to stdout.
 
 DEBUG=$DEBUG_DEFAULT # Default: no debug.
 FORCED=$FORCED_DEFAULT
 COND=$COND_DEFAULT
 TRANSFILE= # Default: don't use a transfile.
-WATCH_TRANSFILE=$WATCH_TRANSFILE_DEFAULT
+MONITOR=$MONITOR_DEFAULT
 OUTPUT=$OUTPUT_DEFAULT
 
 while [ ! -z "$1" ]; do
@@ -113,8 +116,8 @@ while [ ! -z "$1" ]; do
 	+D) debugging 0 ;;
 	-F) FORCED=1 ;;
 	+F) FORCED=0 ;;
-	-W) WATCH_TRANSFILE=1 ;;
-	+W) WATCH_TRANSFILE=0 ;;
+	-M) MONITOR=1 ;;
+	+M) MONITOR=0 ;;
 	-C)
 	    CONFIG_FILE=${ARG:3}
 	    [ -z "$CONFIG_FILE" ] && die "-C: Missing config file"
@@ -153,16 +156,16 @@ if [ ! -z "$TRANSFILE" -a ! -e "$TRANSFILE" ]; then
     <"$TRANSFILE"
 fi
 
-[ -z "$WATCH_TRANSFILE" ] && WATCH_TRANSFILE=$WATCH_TRANSFILE_DEFAULT
-if [ $WATCH_TRANSFILE = 1 -a -z "$TRANSFILE" ]; then
-    die "Transfile watching requested, but no transfile specified"
-fi
-
 [ -z "$OUTPUT" ] && OUTPUT=$OUTPUT_DEFAULT
 if [ "x$OUTPUT" != "x-" ]; then
     HAS_OUTPUT_FILE=1
 else
     HAS_OUTPUT_FILE=0
+fi
+
+[ -z "$MONITOR" ] && MONITOR=$MONITOR_DEFAULT
+if [ $MONITOR = 1 -a -z "$TRANSFILE" -a $HAS_OUTPUT_FILE = 0 ]; then
+    die "Monitoring requested, but no transfile nor outfile specified"
 fi
 
 INPUT_BEAU=$INPUT-b
@@ -229,17 +232,12 @@ function generate_discrete_translator() {
     return 1
 }
 
-if [ ! -z "$TRANSFILE" ]; then
-    generate_discrete_translator || true
-fi
-
 # Preserve changes to the final outfile in a patch
-if [ $HAS_OUTPUT_FILE = 1 ]; then
+function generate_patch() {
     if [ -e "$OUTPUT"-trans ]; then
 	diff -u "$OUTPUT"-trans "$OUTPUT" > "$OUTPUT".patch || true
     fi
-    exec 1>"$OUTPUT"-trans
-fi
+}
 
 function initial_stage() {
     if [ $DO_INITIAL_STAGE = 0 ]; then
@@ -266,20 +264,48 @@ function final_stage() {
     # Reapply patch to recover changes
     if [ $HAS_OUTPUT_FILE = 1 ]; then
 	if [ -e "$OUTPUT".patch ]; then
-	    patch -b -o "$OUTPUT" "$OUTPUT"-trans < "$OUTPUT".patch >&2 || true
+	    patch -b -o "$OUTPUT" "$OUTPUT"-trans < "$OUTPUT".patch >&2
 	else
 	    cp -f "$OUTPUT"-trans "$OUTPUT"
 	fi
     fi
 }
 
+if [ ! -z "$TRANSFILE" ]; then
+    generate_discrete_translator || true
+fi
+
+if [ $HAS_OUTPUT_FILE = 1 ]; then
+    generate_patch
+    exec 1>&-
+    exec 1>"$OUTPUT"-trans
+fi
+
 initial_stage | final_stage
 
-if [ $WATCH_TRANSFILE = 1 ]; then
-    while inotifywait "$TRANSFILE" --event MODIFY --quiet >&2; do
-	generate_discrete_translator &&
-	    exec 1>&- &&
-	    exec 1>"$OUTPUT"-trans &&
-	    final_stage < "$INPUT"-trans
+function monitor() {
+    {
+	[ ! -z "$TRANSFILE" ] && echo $TRANSFILE
+	[ $HAS_OUTPUT_FILE = 1 ] && echo $OUTPUT
+    } | inotifywait --fromfile - --event MODIFY --quiet --format %w 2>&1
+}
+
+if [ $MONITOR = 1 ]; then
+    while true; do
+	file=$(monitor)
+	echo "inotify $file" >&2
+	case "$file" in
+	    "$OUTPUT")
+		generate_patch
+		;;
+	    "$TRANSFILE")
+		generate_discrete_translator
+		exec 1>&-
+		exec 1>"$OUTPUT"-trans
+		final_stage < "$INPUT"-trans
+		;;
+	    *)
+		die "inotifywait error"
+	esac
     done
 fi

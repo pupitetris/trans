@@ -5,7 +5,7 @@ Quick and dirty deobfuscator for JavaScript code processed with [Javascript-obfu
 ```
 Usage:
 trans.sh [-h] [{-|+}D] [-C=configfile] [{+|-}F] -i=infile
-        [-c=[cond]] [-t=transfile [{+|-}W]] [-o=[outfile]]
+        [-c=[cond]] [-t=transfile [-o=[outfile]] [{+|-}M]]
 
         Arguments may be given in any order, any number of times.
 
@@ -46,16 +46,18 @@ trans.sh [-h] [{-|+}D] [-C=configfile] [{+|-}F] -i=infile
                 corresponding strings in the second column. See README.md
                 for format.
 
-        -W      If a transfile is specified and after processing is done, watch
-                the file and reexecute process if modifications are detected.
-        +W      Turn off transfile watching.
-
         -o      outfile if specified will send output to this file. If the
                 file already exists, a patch will first be generated between
                 the last direct output of the infile's deobfuscation and the
                 outfile, to preserve any changes made on the output after the
                 last run. Then, the translation will be performed and the
                 patch will be reapplied. Default: use stdout, no patching.
+
+        -M      Stand by monitoring files, reprocess accordingly. If transfile
+                is modified, regenerate discrete translator and reprocess. If
+                outfile is modified, regenerate patch. Any reprocessing errors
+                will stop monitoring and force an exit.
+        +M      Disable monitoring.
 
 Example:
 trans.sh -i=xcsim_1.3_enc.js -c='/^function *simulator *()/' -o=xcsim_1.3.js
