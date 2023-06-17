@@ -200,6 +200,8 @@ s/!0x0\([^0-9a-f]\|$\)/true\1/g
 s/!0x1\([^0-9a-f]\|$\)/false\1/g
 s/!\!\[\]/true/g
 s/!\[\]/false/g
+# Other wierd values:
+s/void 0x0/undefined/g
 # Character literals: (now done by js-beautify)
 # s/\x20/ /g
 p
