@@ -15,10 +15,11 @@ trans.sh [-h] [{-|+}D] [-C=configfile] [{-|+}F] -i=infile
                 is sourced to set internal variables that represent
                 command-line switches:
 
-                DEBUG=0|1        Set to 1 to enable debugging
+                DEBUG=0|1
                 PS4=string       Set the debugging prefix string
                                  Default: "$0 \$LINENO: "
-                FORCED=0|1       Set to 1 to enable forced execution.
+                FORCED=0|1
+                MONITOR=0|1
                 INPUT=infile
                 COND=string
                 TRANSFILE=transfile
