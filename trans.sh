@@ -107,10 +107,10 @@ OUTPUT=$OUTPUT_DEFAULT
 while [ ! -z "$1" ]; do
     ARG="$1"
     shift
-    case ${ARG%%=*} in
+    case "${ARG%%=*}" in
 	-h) usage 0 ;;
-	-d) debugging 1 ;;
-	+d) debugging 0 ;;
+	-D) debugging 1 ;;
+	+D) debugging 0 ;;
 	-F) FORCED=1 ;;
 	+F) FORCED=0 ;;
 	-W) WATCH_TRANSFILE=1 ;;
