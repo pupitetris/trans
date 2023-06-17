@@ -112,7 +112,7 @@ _0x0d1e2f another_var
 
 ## Dependencies:
 
-- GNU bash, sed, grep, patch, diffutils, coreutils (cat, cut, sort, uniq, stat, dirname, basename)
+- GNU bash, sed, grep, patch, diffutils, coreutils (cat, cut, sort, uniq, dirname)
 - node.js (apt install nodejs, tested with 18.13)
 - js-beautify (apt install node-js-beautify, tested with 1.14)
 - perl (standard with Linux installations)

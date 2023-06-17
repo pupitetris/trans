@@ -172,8 +172,7 @@ INPUT_BEAU=$INPUT-b
 [ $DEBUG = 0 ] && JS_BEAUTIFY_QUIET=--quiet
 
 DO_INITIAL_STAGE=0
-if [ "$FORCED" = 1 -o ! -e "$INPUT"-trans -o \
-	       $(stat -c %Y "$INPUT") -gt 0$(stat -c %Y "$INPUT_BEAU" 2>/dev/null) ]; then
+if [ "$FORCED" = 1 -o ! -e "$INPUT"-trans -o "$INPUT" -nt "$INPUT_BEAU" ]; then
 
     touch "$INPUT_BEAU"
     # apt install node-js-beautify
@@ -214,8 +213,7 @@ EOF
 fi
 
 function generate_discrete_translator() {
-    if [ $FORCED = 1 -o \
-	 $(stat -c %Y "$TRANSFILE") -gt 0$(stat -c %Y "$TRANSFILE"-sed 2>/dev/null) ]; then
+    if [ $FORCED = 1 -o "$TRANSFILE" -nt "$TRANSFILE"-sed ]; then
 	sed -n '
 	    1i# Manual symbol translations:
 	    s/^\s+//
