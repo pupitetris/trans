@@ -7,8 +7,8 @@ function usage {
 
     cat >&2 <<EOF
 Usage:
-$0 [-h] [{-|+}D] [-C=configfile] [{+|-}F] -i=infile
-        [-c=[cond]] [-t=transfile [-o=[outfile]] [{+|-}M]]
+$0 [-h] [{-|+}D] [-C=configfile] [{-|+}F] -i=infile
+        [-c=[cond]] [-t=transfile [-o=[outfile]] [{-|+}M]]
 
         Arguments may be given in any order, any number of times.
 
