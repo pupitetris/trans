@@ -152,27 +152,56 @@ if [ ! -e "$INFILE" ]; then
     <"$INFILE" # reminder: we are using errexit
 fi
 
-if [ ! -z "$TRANSFILE" -a ! -e "$TRANSFILE" ]; then
-    <"$TRANSFILE"
+if [ ! -z "$TRANSFILE" ]; then
+    HAS_TRANSFILE=1
+    if [ ! -e "$TRANSFILE" ]; then
+	<"$TRANSFILE"
+    fi
+else
+    HAS_TRANSFILE=0
 fi
 
 [ -z "$OUTFILE" ] && OUTFILE=$OUTFILE_DEFAULT
 if [ "x$OUTFILE" != "x-" ]; then
-    HAS_OUTFILE_FILE=1
+    HAS_OUTFILE=1
 else
-    HAS_OUTFILE_FILE=0
+    HAS_OUTFILE=0
 fi
 
 [ -z "$MONITOR" ] && MONITOR=$MONITOR_DEFAULT
-if [ $MONITOR = 1 -a -z "$TRANSFILE" -a $HAS_OUTFILE_FILE = 0 ]; then
+if [ $MONITOR = 1 -a $HAS_TRANSFILE = 0 -a $HAS_OUTFILE = 0 ]; then
     die "Monitoring requested, but no transfile nor outfile specified"
 fi
 
-INFILE_BEAU=$INFILE-b
 [ $DEBUG = 0 ] && JS_BEAUTIFY_QUIET=--quiet
 
+# Path finding:
+
+INDIR=$(dirname "$INFILE")/.trans
+mkdir -p "$INDIR"
+IN_PREFIX=$INDIR/$INFILE
+INFILE_BEAU=$IN_PREFIX-b
+INFILE_SED=$IN_PREFIX-sed
+INFILE_TRANS=$IN_PREFIX-trans
+
+if [ $HAS_OUTFILE = 1 ]; then
+    OUTDIR=$(dirname "$OUTFILE")/.trans
+    mkdir -p "$OUTDIR"
+    OUT_PREFIX=$OUTDIR/$OUTFILE
+    OUTFILE_TRANS=$OUT_PREFIX-trans\
+    # Not a mistake since the patch is a product of the workflow:
+    OUTFILE_PATCH=$OUTFILE.patch
+fi
+
+if [ $HAS_TRANSFILE = 1 ]; then
+    TRANSDIR=$(dirname "$TRANSFILE")/.trans
+    mkdir -p "$TRANSDIR"
+    TRANS_PREFIX=$TRANSDIR/$TRANSFILE
+    TRANSFILE_SED=$TRANS_PREFIX-sed
+fi
+
 DO_INITIAL_STAGE=0
-if [ "$FORCED" = 1 -o ! -e "$INFILE"-trans -o "$INFILE" -nt "$INFILE_BEAU" ]; then
+if [ "$FORCED" = 1 -o ! -e "$INFILE_TRANS" -o "$INFILE" -nt "$INFILE_BEAU" ]; then
 
     touch "$INFILE_BEAU"
     # apt install node-js-beautify
@@ -209,11 +238,11 @@ s/void 0x0/undefined/g
 p
 }
 EOF
-    } > "$INFILE"-sed
+    } > "$INFILE_SED"
 fi
 
 function generate_discrete_translator() {
-    if [ $FORCED = 1 -o "$TRANSFILE" -nt "$TRANSFILE"-sed ]; then
+    if [ $FORCED = 1 -o "$TRANSFILE" -nt "$TRANSFILE_SED" ]; then
 	sed -n '
 	    1i# Manual symbol translations:
 	    s/^\s+//
@@ -224,7 +253,7 @@ function generate_discrete_translator() {
 		s/^[^[:space:]]\+\s*$/& /
 		s/^\([^[:space:]]\+\)\s\+\(.*\|$\)/s\/\\([^0-9a-zA-Z_]\\)\1\/\\1\2\/g/
 		p
-	    }' "$TRANSFILE" > "$TRANSFILE"-sed
+	    }' "$TRANSFILE" > "$TRANSFILE_SED"
 	return 0
     fi
     return 1
@@ -232,59 +261,59 @@ function generate_discrete_translator() {
 
 # Preserve changes to the final outfile in a patch
 function generate_patch() {
-    if [ -e "$OUTFILE"-trans ]; then
-	diff -u "$OUTFILE"-trans "$OUTFILE" > "$OUTFILE".patch || true
+    if [ -e "$OUTFILE_TRANS" ]; then
+	diff -u "$OUTFILE_TRANS" "$OUTFILE" > "$OUTFILE_PATCH" || true
     fi
 }
 
 function initial_stage() {
     if [ $DO_INITIAL_STAGE = 0 ]; then
-	cat "$INFILE"-trans
+	cat "$INFILE_TRANS"
 	return
     fi
 
     # Call sed and afterwards pass perl to replace hex literals
     # with decimal literals. Finally reindent.
-    sed -n -f "$INFILE"-sed "$INFILE_BEAU" |
+    sed -n -f "$INFILE_SED" "$INFILE_BEAU" |
 	perl -pe 's/([^_a-zA-Z0-9])0x([0-9a-f]+)/$1.hex($2)/eg' |
 	js-beautify --file - --good-stuff --unescape-strings \
 		    --break-chained-methods --end-with-newline |
-	tee "$INFILE"-trans
+	tee "$INFILE_TRANS"
 }
 
 function final_stage() {
-    if [ -z "$TRANSFILE" ]; then
+    if [ $HAS_TRANSFILE = 0 ]; then
 	cat
     else
-	sed -f "$TRANSFILE"-sed
+	sed -f "$TRANSFILE_SED"
     fi
 
     # Reapply patch to recover changes
-    if [ $HAS_OUTFILE_FILE = 1 ]; then
-	if [ -e "$OUTFILE".patch ]; then
-	    patch -b -o "$OUTFILE" "$OUTFILE"-trans < "$OUTFILE".patch >&2
+    if [ $HAS_OUTFILE = 1 ]; then
+	if [ -e "$OUTFILE_PATCH" ]; then
+	    patch -b -o "$OUTFILE" "$OUTFILE_TRANS" < "$OUTFILE_PATCH" >&2
 	else
-	    cp -f "$OUTFILE"-trans "$OUTFILE"
+	    cp -f "$OUTFILE_TRANS" "$OUTFILE"
 	fi
     fi
 }
 
-if [ ! -z "$TRANSFILE" ]; then
+if [ $HAS_TRANSFILE = 1 ]; then
     generate_discrete_translator || true
 fi
 
-if [ $HAS_OUTFILE_FILE = 1 ]; then
+if [ $HAS_OUTFILE = 1 ]; then
     generate_patch
     exec 1>&-
-    exec 1>"$OUTFILE"-trans
+    exec 1>"$OUTFILE_TRANS"
 fi
 
 initial_stage | final_stage
 
 function monitor() {
     {
-	[ ! -z "$TRANSFILE" ] && echo $TRANSFILE
-	[ $HAS_OUTFILE_FILE = 1 ] && echo $OUTFILE
+	[ $HAS_TRANSFILE = 1 ] && echo $TRANSFILE
+	[ $HAS_OUTFILE = 1 ] && echo $OUTFILE
     } | inotifywait --fromfile - --event MODIFY --quiet --format %w 2>&1
 }
 
@@ -299,8 +328,8 @@ if [ $MONITOR = 1 ]; then
 	    "$TRANSFILE")
 		generate_discrete_translator
 		exec 1>&-
-		exec 1>"$OUTFILE"-trans
-		final_stage < "$INFILE"-trans
+		exec 1>"$OUTFILE_TRANS"
+		final_stage < "$INFILE_TRANS"
 		;;
 	    *)
 		die "inotifywait error"
