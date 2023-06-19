@@ -23,10 +23,10 @@ $0 [-h] [{-|+}D] [-C=configfile] [{-|+}F] -i=infile
                                  Default: "\$0 \\\$LINENO: "
                 FORCED=0|1
                 MONITOR=0|1
-                INPUT=infile
+                INFILE=infile
                 COND=string
                 TRANSFILE=transfile
-                OUTPUT=outfile
+                OUTFILE=outfile
 
                 Settings in the config file will be overriden by
                 subsequent command-line arguments.
@@ -98,14 +98,14 @@ DEBUG_DEFAULT=0
 FORCED_DEFAULT=0
 COND_DEFAULT=1 # Write output from first line.
 MONITOR_DEFAULT=0
-OUTPUT_DEFAULT=- # Write output to stdout.
+OUTFILE_DEFAULT=- # Write output to stdout.
 
 DEBUG=$DEBUG_DEFAULT # Default: no debug.
 FORCED=$FORCED_DEFAULT
 COND=$COND_DEFAULT
 TRANSFILE= # Default: don't use a transfile.
 MONITOR=$MONITOR_DEFAULT
-OUTPUT=$OUTPUT_DEFAULT
+OUTFILE=$OUTFILE_DEFAULT
 
 while [ ! -z "$1" ]; do
     ARG="$1"
@@ -125,8 +125,8 @@ while [ ! -z "$1" ]; do
 	    debugging $DEBUG
 	    ;;
 	-i)
-	    INPUT=${ARG:3}
-	    [ -z "$INPUT" ] && die "-i: Missing infile"
+	    INFILE=${ARG:3}
+	    [ -z "$INFILE" ] && die "-i: Missing infile"
 	    ;;
 	-c)
 	    COND=${ARG:3}
@@ -136,7 +136,7 @@ while [ ! -z "$1" ]; do
 	    TRANSFILE=${ARG:3}
 	    ;;
 	-o)
-	    OUTPUT=${ARG:3}
+	    OUTFILE=${ARG:3}
 	    ;;
 	*)
 	    die "Unrecognized option \"$ARG\""
@@ -147,36 +147,36 @@ done
 
 [ -z "$FORCED" ] && FORCED=$FORCED_DEFAULT
 
-[ -z "$INPUT" ] && die "Missing infile parameter"
-if [ ! -e "$INPUT" ]; then
-    <"$INPUT" # reminder: we are using errexit
+[ -z "$INFILE" ] && die "Missing infile parameter"
+if [ ! -e "$INFILE" ]; then
+    <"$INFILE" # reminder: we are using errexit
 fi
 
 if [ ! -z "$TRANSFILE" -a ! -e "$TRANSFILE" ]; then
     <"$TRANSFILE"
 fi
 
-[ -z "$OUTPUT" ] && OUTPUT=$OUTPUT_DEFAULT
-if [ "x$OUTPUT" != "x-" ]; then
-    HAS_OUTPUT_FILE=1
+[ -z "$OUTFILE" ] && OUTFILE=$OUTFILE_DEFAULT
+if [ "x$OUTFILE" != "x-" ]; then
+    HAS_OUTFILE_FILE=1
 else
-    HAS_OUTPUT_FILE=0
+    HAS_OUTFILE_FILE=0
 fi
 
 [ -z "$MONITOR" ] && MONITOR=$MONITOR_DEFAULT
-if [ $MONITOR = 1 -a -z "$TRANSFILE" -a $HAS_OUTPUT_FILE = 0 ]; then
+if [ $MONITOR = 1 -a -z "$TRANSFILE" -a $HAS_OUTFILE_FILE = 0 ]; then
     die "Monitoring requested, but no transfile nor outfile specified"
 fi
 
-INPUT_BEAU=$INPUT-b
+INFILE_BEAU=$INFILE-b
 [ $DEBUG = 0 ] && JS_BEAUTIFY_QUIET=--quiet
 
 DO_INITIAL_STAGE=0
-if [ "$FORCED" = 1 -o ! -e "$INPUT"-trans -o "$INPUT" -nt "$INPUT_BEAU" ]; then
+if [ "$FORCED" = 1 -o ! -e "$INFILE"-trans -o "$INFILE" -nt "$INFILE_BEAU" ]; then
 
-    touch "$INPUT_BEAU"
+    touch "$INFILE_BEAU"
     # apt install node-js-beautify
-    js-beautify $JS_BEAUTIFY_QUIET --file "$INPUT" --outfile "$INPUT_BEAU" >&2
+    js-beautify $JS_BEAUTIFY_QUIET --file "$INFILE" --outfile "$INFILE_BEAU" >&2
 
     DO_INITIAL_STAGE=1
 
@@ -187,9 +187,9 @@ $COND,\${
 EOF
 
 	base=$(dirname "$0")
-	sed 's/a0_0x1993('\''\([^'\'']\+\)'\'', \?'\''\([^'\'']\+\)'\''/\n@@@\t\1\t\2\n/g' "$INPUT_BEAU" |
+	sed 's/a0_0x1993('\''\([^'\'']\+\)'\'', \?'\''\([^'\'']\+\)'\''/\n@@@\t\1\t\2\n/g' "$INFILE_BEAU" |
 	    grep ^@@@ | cut -c5- | sort --key=1,3 --general-numeric-sort | uniq |
-	    node "$base"/trans.js "$INPUT_BEAU"
+	    node "$base"/trans.js "$INFILE_BEAU"
 
 	cat <<EOF
 # Deobfuscation:
@@ -209,7 +209,7 @@ s/void 0x0/undefined/g
 p
 }
 EOF
-    } > "$INPUT"-sed
+    } > "$INFILE"-sed
 fi
 
 function generate_discrete_translator() {
@@ -232,24 +232,24 @@ function generate_discrete_translator() {
 
 # Preserve changes to the final outfile in a patch
 function generate_patch() {
-    if [ -e "$OUTPUT"-trans ]; then
-	diff -u "$OUTPUT"-trans "$OUTPUT" > "$OUTPUT".patch || true
+    if [ -e "$OUTFILE"-trans ]; then
+	diff -u "$OUTFILE"-trans "$OUTFILE" > "$OUTFILE".patch || true
     fi
 }
 
 function initial_stage() {
     if [ $DO_INITIAL_STAGE = 0 ]; then
-	cat "$INPUT"-trans
+	cat "$INFILE"-trans
 	return
     fi
 
     # Call sed and afterwards pass perl to replace hex literals
     # with decimal literals. Finally reindent.
-    sed -n -f "$INPUT"-sed "$INPUT_BEAU" |
+    sed -n -f "$INFILE"-sed "$INFILE_BEAU" |
 	perl -pe 's/([^_a-zA-Z0-9])0x([0-9a-f]+)/$1.hex($2)/eg' |
 	js-beautify --file - --good-stuff --unescape-strings \
 		    --break-chained-methods --end-with-newline |
-	tee "$INPUT"-trans
+	tee "$INFILE"-trans
 }
 
 function final_stage() {
@@ -260,11 +260,11 @@ function final_stage() {
     fi
 
     # Reapply patch to recover changes
-    if [ $HAS_OUTPUT_FILE = 1 ]; then
-	if [ -e "$OUTPUT".patch ]; then
-	    patch -b -o "$OUTPUT" "$OUTPUT"-trans < "$OUTPUT".patch >&2
+    if [ $HAS_OUTFILE_FILE = 1 ]; then
+	if [ -e "$OUTFILE".patch ]; then
+	    patch -b -o "$OUTFILE" "$OUTFILE"-trans < "$OUTFILE".patch >&2
 	else
-	    cp -f "$OUTPUT"-trans "$OUTPUT"
+	    cp -f "$OUTFILE"-trans "$OUTFILE"
 	fi
     fi
 }
@@ -273,10 +273,10 @@ if [ ! -z "$TRANSFILE" ]; then
     generate_discrete_translator || true
 fi
 
-if [ $HAS_OUTPUT_FILE = 1 ]; then
+if [ $HAS_OUTFILE_FILE = 1 ]; then
     generate_patch
     exec 1>&-
-    exec 1>"$OUTPUT"-trans
+    exec 1>"$OUTFILE"-trans
 fi
 
 initial_stage | final_stage
@@ -284,7 +284,7 @@ initial_stage | final_stage
 function monitor() {
     {
 	[ ! -z "$TRANSFILE" ] && echo $TRANSFILE
-	[ $HAS_OUTPUT_FILE = 1 ] && echo $OUTPUT
+	[ $HAS_OUTFILE_FILE = 1 ] && echo $OUTFILE
     } | inotifywait --fromfile - --event MODIFY --quiet --format %w 2>&1
 }
 
@@ -293,14 +293,14 @@ if [ $MONITOR = 1 ]; then
 	file=$(monitor)
 	echo "inotify $file" >&2
 	case "$file" in
-	    "$OUTPUT")
+	    "$OUTFILE")
 		generate_patch
 		;;
 	    "$TRANSFILE")
 		generate_discrete_translator
 		exec 1>&-
-		exec 1>"$OUTPUT"-trans
-		final_stage < "$INPUT"-trans
+		exec 1>"$OUTFILE"-trans
+		final_stage < "$INFILE"-trans
 		;;
 	    *)
 		die "inotifywait error"

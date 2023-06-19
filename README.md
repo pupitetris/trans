@@ -20,10 +20,10 @@ trans.sh [-h] [{-|+}D] [-C=configfile] [{-|+}F] -i=infile
                                  Default: "$0 \$LINENO: "
                 FORCED=0|1
                 MONITOR=0|1
-                INPUT=infile
+                INFILE=infile
                 COND=string
                 TRANSFILE=transfile
-                OUTPUT=outfile
+                OUTFILE=outfile
 
                 Settings in the config file will be overriden by
                 subsequent command-line arguments.
